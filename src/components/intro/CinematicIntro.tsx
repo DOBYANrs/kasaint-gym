@@ -4,7 +4,6 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import gsap from 'gsap';
 import { getDaySchedule } from '../../data/schedule';
 import type { MuscleRankResult, MuscleGroup } from '../../utils/ranking';
-import type { MuscleScore } from '../../utils/muscleScoring';
 import {
   applyRankColors,
   pulseMuscles,
@@ -13,8 +12,6 @@ import {
 
 interface CinematicIntroProps {
   muscleRanks: MuscleRankResult[];
-  muscleScores: MuscleScore[];
-  highlightMuscles: string[];
   onComplete: () => void;
   height?: number;
 }
@@ -39,8 +36,6 @@ const DAY_PRIMARY: Record<string, { mesh: string; label: string; side: 'front' |
 
 export default function CinematicIntro({
   muscleRanks,
-  muscleScores,
-  highlightMuscles,
   onComplete,
   height = 400,
 }: CinematicIntroProps) {
@@ -60,8 +55,6 @@ export default function CinematicIntro({
     rankMapRef.current = map;
   }, [muscleRanks]);
 
-  void muscleScores;
-  void highlightMuscles;
 
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;

@@ -66,7 +66,6 @@ const POLYGON_COUNTS: Record<string, { anterior: number; posterior: number }> = 
   'front-deltoids': { anterior: 2, posterior: 0 },
   head: { anterior: 1, posterior: 1 },
   abductors: { anterior: 2, posterior: 0 },
-  'abductor': { anterior: 0, posterior: 2 },
   quadriceps: { anterior: 6, posterior: 0 },
   knees: { anterior: 2, posterior: 2 },
   calves: { anterior: 4, posterior: 4 },

@@ -52,13 +52,17 @@ export function tierFromPercentile(pct: number): { name: string; level: number }
 
 // ─── Per-exercise population standards ─────────────────────
 // Real bodyweight-ratio thresholds (e1RM ÷ bodyweight) for the five
-// tier anchors, sourced from Strength Level (150M+ logged lifts; tier =
-// percentile: Beginner 5th, Novice 20th, Intermediate 50th, Advanced 80th,
-// Elite 95th). A lifter's ratio is interpolated between these fixed
-// boundaries — no guessed distribution spreads, so no normal lift inflates
-// to an extreme percentile.
+// tier anchors. Ratios are taken from Strength Level's MALE standards tables
+// (150M+ logged lifts) pulled in 2026, interpolated for a ~62-75 kg lifter:
+//   Beginner = 5th pct, Novice = 20th, Intermediate = 50th,
+//   Advanced = 80th, Elite = 95th.
+// A lifter's ratio is interpolated between these fixed boundaries, so no
+// ordinary gym lift extrapolates to an extreme percentile.
 // rat = [beginner, novice, intermediate, advanced, elite]
 // upper = upper-body/compression move (BMI leverage applies).
+// Load is what the user logs (machine stack / plates as displayed). Two
+// exceptions log TOTAL load including bodyweight: Standing Calf Raise and
+// Pull Up — their thresholds are expressed against that total.
 export interface ExerciseStandard {
   rat: [number, number, number, number, number];
   upper: boolean; // upper-body compression move (BMI leverage applies)
@@ -98,15 +102,15 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandard> = {
     targets: [{ muscle: 'Chest', effectiveness: 0.20 }],
   },
   'Cable Fly': {
-    name: 'Cable Fly', rat: [0.08, 0.13, 0.25, 0.40, 0.55], upper: true, scoreWeight: 0.7,
+    name: 'Cable Fly', rat: [0.06, 0.20, 0.45, 0.75, 1.15], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Chest', effectiveness: 0.15 }],
   },
   'Cable Fly 55 Degree': {
-    name: 'Cable Fly 55 Degree', rat: [0.08, 0.13, 0.25, 0.40, 0.55], upper: true, scoreWeight: 0.7,
+    name: 'Cable Fly 55 Degree', rat: [0.06, 0.20, 0.45, 0.75, 1.15], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Chest', effectiveness: 0.15 }],
   },
   'Lower Chest Cable Pulldown': {
-    name: 'Lower Chest Cable Pulldown', rat: [0.10, 0.16, 0.30, 0.48, 0.65], upper: true, scoreWeight: 0.7,
+    name: 'Lower Chest Cable Pulldown', rat: [0.05, 0.18, 0.40, 0.68, 1.05], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Chest', effectiveness: 0.25 }],
   },
   // NOTE: none of the press/fly family above targets the coarse 'Shoulders'
@@ -117,42 +121,42 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandard> = {
   // ── BACK (vertical pull) ──
   // Lat Pulldown: 1RM/BW ratio from Strength Level.
   'Lat Pulldown': {
-    name: 'Lat Pulldown', rat: [0.40, 0.50, 0.75, 1.00, 1.50], upper: true, scoreWeight: 0.7,
+    name: 'Lat Pulldown', rat: [0.60, 0.85, 1.15, 1.45, 1.85], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Back', effectiveness: 0.35 }],
   },
   'Pull Down': {
-    name: 'Pull Down', rat: [0.40, 0.50, 0.75, 1.00, 1.50], upper: true, scoreWeight: 0.7,
+    name: 'Pull Down', rat: [0.60, 0.85, 1.15, 1.45, 1.85], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Back', effectiveness: 0.35 }],
   },
   '1-Hand Lat Pulldown': {
-    name: '1-Hand Lat Pulldown', rat: [0.40, 0.60, 0.80, 1.20, 1.40], upper: true, scoreWeight: 0.7,
+    name: '1-Hand Lat Pulldown', rat: [0.30, 0.45, 0.60, 0.80, 1.00], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Back', effectiveness: 0.30 }],
   },
   'Pull Up': {
-    name: 'Pull Up', rat: [0.75, 1.00, 1.25, 1.50, 1.75], upper: true, scoreWeight: 1.0,
+    name: 'Pull Up', rat: [0.75, 1.00, 1.25, 1.55, 1.85], upper: true, scoreWeight: 1.0,
     targets: [{ muscle: 'Back', effectiveness: 0.35 }],
   },
   // ── BACK (horizontal / upper-mid row) ──
   'Row Machine 2 Var 2': {
-    name: 'Row Machine 2 Var 2', rat: [0.40, 0.50, 0.70, 0.95, 1.25], upper: true, scoreWeight: 0.7,
+    name: 'Row Machine 2 Var 2', rat: [0.55, 0.80, 1.10, 1.45, 1.85], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Back', effectiveness: 0.40 }],
   },
   'Row Machine 1 Var 2': {
-    name: 'Row Machine 1 Var 2', rat: [0.40, 0.50, 0.70, 0.95, 1.25], upper: true, scoreWeight: 0.7,
+    name: 'Row Machine 1 Var 2', rat: [0.55, 0.80, 1.10, 1.45, 1.85], upper: true, scoreWeight: 0.7,
     targets: [
       { muscle: 'Back', effectiveness: 0.40 },
       { muscle: 'Shoulders', effectiveness: 0.15 },
     ],
   },
   'Archer Pull': {
-    name: 'Archer Pull', rat: [0.30, 0.45, 0.65, 0.90, 1.10], upper: true, scoreWeight: 0.7,
+    name: 'Archer Pull', rat: [0.50, 0.72, 1.00, 1.32, 1.70], upper: true, scoreWeight: 0.7,
     targets: [
       { muscle: 'Back', effectiveness: 0.20 },
       { muscle: 'Shoulders', effectiveness: 0.30 },
     ],
   },
   'Bent-Over Dumbbell Reverse Fly': {
-    name: 'Bent-Over Dumbbell Reverse Fly', rat: [0.30, 0.45, 0.65, 0.90, 1.10], upper: true, scoreWeight: 0.7,
+    name: 'Bent-Over Dumbbell Reverse Fly', rat: [0.15, 0.25, 0.40, 0.60, 0.85], upper: true, scoreWeight: 0.7,
     targets: [
       { muscle: 'Shoulders', effectiveness: 0.30 },
       { muscle: 'Back', effectiveness: 0.20 },
@@ -161,48 +165,49 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandard> = {
   // ── SHOULDERS ──
   // Overhead Press (barbell/dumbbell/machine): 1RM/BW ratio from Strength Level.
   'Overhead Press': {
-    name: 'Overhead Press', rat: [0.35, 0.40, 0.60, 0.85, 1.10], upper: true,
+    name: 'Overhead Press', rat: [0.35, 0.55, 0.78, 1.05, 1.32], upper: true,
     targets: [{ muscle: 'Shoulders', effectiveness: 0.50 }],
   },
   'Face Pulls': {
-    name: 'Face Pulls', rat: [0.20, 0.30, 0.45, 0.65, 0.85], upper: true, scoreWeight: 0.7,
+    name: 'Face Pulls', rat: [0.18, 0.30, 0.48, 0.70, 0.95], upper: true, scoreWeight: 0.7,
     targets: [
       { muscle: 'Shoulders', effectiveness: 0.20 },
       { muscle: 'Back', effectiveness: 0.10 },
     ],
   },
   'Lateral Raise': {
-    name: 'Lateral Raise', rat: [0.15, 0.22, 0.32, 0.45, 0.60], upper: true, scoreWeight: 0.7,
+    name: 'Lateral Raise', rat: [0.05, 0.11, 0.21, 0.34, 0.48], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Shoulders', effectiveness: 0.30 }],
   },
   // ── LEGS (quad/glute) ──
-  // Squat-proxy (Leg Press): 1RM/BW from Strength Level 50th-95th.
-  // Elite endpoint extended to 3.00 to accommodate heavy leg-press users
-  // (e.g. 160kg×5 at 77kg BW → ratio 2.42 = Advanced, not Legendary).
+  // 45° sled leg press (plates as displayed): SL 'Sled Leg Press' male table.
+  // At 62 kg: Inter 179 kg / Adv 249 kg / Elite 327 kg 1RM (2.9× / 4.0× /
+  // 5.3× bodyweight). 140kg×15 (~3.4×) is ~65th percentile here; the old
+  // anchors (Elite 3.0×) made an ordinary leg-press set rank as Legendary.
   'Low-Foot Placement Leg Press': {
-    name: 'Low-Foot Placement Leg Press', rat: [0.60, 0.75, 1.25, 2.25, 3.00], upper: false, scoreWeight: 0.7,
+    name: 'Low-Foot Placement Leg Press', rat: [1.20, 1.95, 2.90, 4.00, 5.20], upper: false, scoreWeight: 0.7,
     targets: [{ muscle: 'Legs', effectiveness: 0.40 }],
   },
   'Low-Foot Leg Press': {
-    name: 'Low-Foot Leg Press', rat: [0.60, 0.75, 1.25, 2.25, 3.00], upper: false, scoreWeight: 0.7,
+    name: 'Low-Foot Leg Press', rat: [1.20, 1.95, 2.90, 4.00, 5.20], upper: false, scoreWeight: 0.7,
     targets: [{ muscle: 'Legs', effectiveness: 0.40 }],
   },
   'Leg Press': {
-    name: 'Leg Press', rat: [0.60, 0.75, 1.25, 2.25, 3.00], upper: false, scoreWeight: 0.7,
+    name: 'Leg Press', rat: [1.20, 1.95, 2.90, 4.00, 5.20], upper: false, scoreWeight: 0.7,
     targets: [{ muscle: 'Legs', effectiveness: 0.40 }],
   },
   'Leg Extension': {
-    name: 'Leg Extension', rat: [0.40, 0.50, 0.80, 1.20, 1.60], upper: false, scoreWeight: 0.7,
+    name: 'Leg Extension', rat: [0.60, 0.95, 1.40, 1.95, 2.55], upper: false, scoreWeight: 0.7,
     targets: [{ muscle: 'Legs', effectiveness: 0.30 }],
   },
   // ── HAMSTRINGS ──
   // Leg Curl (prone/seated): 1RM/BW ratio from Strength Level.
   'Hamstring Curl': {
-    name: 'Hamstring Curl', rat: [0.50, 0.75, 1.00, 1.50, 2.00], upper: false, scoreWeight: 0.7,
+    name: 'Hamstring Curl', rat: [0.42, 0.66, 1.00, 1.40, 1.82], upper: false, scoreWeight: 0.7,
     targets: [{ muscle: 'Hamstrings', effectiveness: 0.50 }],
   },
   'Leg Curl': {
-    name: 'Leg Curl', rat: [0.50, 0.75, 1.00, 1.50, 2.00], upper: false, scoreWeight: 0.7,
+    name: 'Leg Curl', rat: [0.42, 0.66, 1.00, 1.40, 1.82], upper: false, scoreWeight: 0.7,
     targets: [{ muscle: 'Hamstrings', effectiveness: 0.50 }],
   },
   // ── ADDUCTORS (inner thigh) ──
@@ -219,37 +224,35 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandard> = {
     targets: [{ muscle: 'Adductors', effectiveness: 1.0 }],
   },
   // ── BICEPS ──
-  // Dumbbell / Cable Curl family: 1RM/BW ratio aligned with the Triceps scale
-  // (Isolation strength ~ comparable to triceps push-down, slightly lower).
-  // Previous standard made Intermediate trivially easy (0.15) which inflated
-  // Biceps composite way above Triceps — corrected to ~Intermediate for
-  // 20kg×12 @ ~62kg. Spider Curl example: 20×12 → rel 0.446 → Intermediate.
+  // Spider curl and EZ/cable curl: SL barbell-curl male table (Inter 37 kg
+  // 1RM at 62 kg BW). 20kg×12 → rel ~0.45 → Intermediate.
   'Spider Curl': {
-    name: 'Spider Curl', rat: [0.20, 0.35, 0.55, 0.80, 1.10], upper: true, scoreWeight: 0.7,
+    name: 'Spider Curl', rat: [0.30, 0.44, 0.60, 0.80, 1.03], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Biceps', effectiveness: 0.40 }],
   },
   'Biceps Curl / Cable Curl': {
-    name: 'Biceps Curl / Cable Curl', rat: [0.18, 0.30, 0.50, 0.75, 1.00], upper: true, scoreWeight: 0.7,
+    name: 'Biceps Curl / Cable Curl', rat: [0.26, 0.40, 0.60, 0.84, 1.10], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Biceps', effectiveness: 0.30 }],
   },
   // ── TRICEPS ──
   'Triceps Push Down': {
-    name: 'Triceps Push Down', rat: [0.25, 0.45, 0.70, 1.05, 1.40], upper: true, scoreWeight: 0.7,
+    name: 'Triceps Push Down', rat: [0.25, 0.40, 0.60, 0.85, 1.15], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Triceps', effectiveness: 0.40 }],
   },
   'Triceps Overhead Extension': {
-    name: 'Triceps Overhead Extension', rat: [0.22, 0.40, 0.65, 0.95, 1.25], upper: true, scoreWeight: 0.7,
+    name: 'Triceps Overhead Extension', rat: [0.20, 0.32, 0.50, 0.72, 1.00], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Triceps', effectiveness: 0.30 }],
   },
   // ── CALVES ──
   'Calf Raise': {
-    name: 'Calf Raise', rat: [0.50, 1.00, 1.50, 2.25, 3.25], upper: false, scoreWeight: 0.7,
+    name: 'Calf Raise', rat: [0.34, 0.69, 1.21, 1.85, 2.60], upper: false, scoreWeight: 0.7,
     targets: [{ muscle: 'Calves', effectiveness: 0.50 }],
   },
   'Standing Calf Raise': {
     // The logged load already includes the lifter's bodyweight (they add it),
-    // so it is scored as-is. Calibrated: 102kg (62.8 bw + ~40 barbell) x 20
-    // (rel ≈2.7) → Intermediate (~40th pct).
+    // so the ratio is total-load ÷ bodyweight and bodyweight is factored in
+    // automatically. Calibrated: 102kg (62.8 bw + ~40 barbell) x 20 (rel ≈2.5
+    // with the 15-rep cap) → Intermediate.
     name: 'Standing Calf Raise', rat: [1.50, 2.10, 3.10, 4.00, 5.00], upper: false, scoreWeight: 0.7,
     targets: [{ muscle: 'Calves', effectiveness: 0.50 }],
   },
@@ -271,16 +274,16 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandard> = {
   },
   // ── FOREARMS ──
   'Wrist Flexion & Extension Superset': {
-    name: 'Wrist Flexion & Extension Superset', rat: [0.20, 0.30, 0.42, 0.60, 0.80], upper: true, scoreWeight: 0.7,
+    name: 'Wrist Flexion & Extension Superset', rat: [0.15, 0.30, 0.50, 0.85, 1.40], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Forearms', effectiveness: 1.0 }],
   },
 };
 
 // Core-move rep targets (performing this many reps/hold = ~50th percentile).
 export const CORE_TARGETS: Record<string, number> = {
-  'Cable Crunches': 20,
-  'Oblique Side Switches': 25,
-  'Floor Crunches / Hanging Knee Raises': 20,
+  'Cable Crunches': 25,
+  'Oblique Side Switches': 30,
+  'Floor Crunches / Hanging Knee Raises': 25,
   'Front Lever Progression': 5,
   'Dead Hang': 30,
 };
@@ -292,11 +295,11 @@ export const CORE_TARGETS: Record<string, number> = {
 export const TIME_ANCHORS: Record<string, [number, number][]> = {
   'Dead Hang': [
     [10, 10],   // ~Beginner
-    [30, 25],   // Intermediate
-    [60, 50],   // Upper-Intermediate
-    [90, 70],   // Advanced
-    [120, 85],  // Highly Advanced
-    [180, 95],  // Legendary / Elite
+    [30, 20],   // Novice
+    [60, 40],   // Intermediate-ish
+    [90, 60],   // Upper-Intermediate
+    [120, 75],  // Advanced
+    [180, 92],  // Highly Advanced → Legendary
   ],
 };
 
@@ -326,7 +329,11 @@ export function bmiLeverage(bmi: number, upper: boolean): number {
 
 export function epley1RM(weightKg: number, reps: number): number {
   if (weightKg <= 0 || reps <= 0) return 0;
-  return weightKg * (1 + reps / 30);
+  // Cap the rep bonus at 15 reps: beyond that a set is muscular endurance,
+  // not max strength, and naive Epley extrapolation (e.g. 40-rep sets) would
+  // inflate an estimated 1RM far past what the lifter could actually do.
+  const eff = Math.min(reps, 15);
+  return weightKg * (1 + eff / 30);
 }
 
 export interface BestLog {

@@ -13,7 +13,7 @@ const LEADERBOARD_EXERCISES = [
   'Incline Chest Press',
   'Cable Fly',
   'Overhead Press',
-  'Biceps Curl',
+  'Biceps Curl / Cable Curl',
   'Pull Up',
   'Leg Extension',
   'Triceps Push Down',

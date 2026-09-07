@@ -5,28 +5,9 @@ import { useWorkout } from '../context/WorkoutContext';
 import { useBody } from '../context/BodyContext';
 import { storeUser } from '../components/UserSelector';
 import CinematicIntro from '../components/intro/CinematicIntro';
-import { getDaySchedule } from '../data/schedule';
-import { calculateAllMuscleScores } from '../utils/muscleScoring';
 import { calculateOverallUserRank, type MuscleRankResult } from '../utils/ranking';
 
 type Phase = 'select' | 'intro' | 'done';
-
-// Map day-of-week schedule muscle groups to our scoring muscle names
-function getTodayHighlightMuscles(): string[] {
-  const now = new Date();
-  const schedule = getDaySchedule(now);
-  if (schedule.isRestDay) return [];
-
-  const highlightMap: Record<string, string[]> = {
-    monday: ['Chest', 'Shoulders', 'Biceps'],
-    tuesday: ['Back', 'Quads', 'Abs'],
-    thursday: ['Back', 'Chest', 'Abs'],
-    friday: ['Shoulders', 'Triceps', 'Biceps', 'Forearms'],
-    saturday: ['Hamstrings', 'Calves', 'Abs'],
-  };
-
-  return highlightMap[schedule.dayOfWeek] ?? [];
-}
 
 interface CharacterSelectPageProps {
   onSelect: (user: UserId) => void;
@@ -38,14 +19,6 @@ export default function CharacterSelectPage({ onSelect }: CharacterSelectPagePro
   const { getLatestProfile } = useBody();
   const [phase, setPhase] = useState<Phase>('select');
   const [selectedUser, setSelectedUser] = useState<UserId | null>(null);
-
-  const highlightMuscles = useMemo(() => getTodayHighlightMuscles(), []);
-
-  // Compute muscle scores for the selected user
-  const muscleScores = useMemo(() => {
-    if (!selectedUser) return [];
-    return calculateAllMuscleScores(workoutData, selectedUser);
-  }, [workoutData, selectedUser]);
 
   // Per-muscle rank tiers used to color the 3D anatomy
   const muscleRanks = useMemo<MuscleRankResult[]>(() => {
@@ -218,8 +191,6 @@ export default function CharacterSelectPage({ onSelect }: CharacterSelectPagePro
 
           <CinematicIntro
             muscleRanks={muscleRanks}
-            muscleScores={muscleScores}
-            highlightMuscles={highlightMuscles}
             onComplete={handleIntroComplete}
             height={450}
           />

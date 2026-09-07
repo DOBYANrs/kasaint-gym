@@ -87,23 +87,33 @@ export default function RankingPage() {
               <tr style={{ color: 'var(--text-muted)' }}>
                 <th className="text-left font-semibold pb-1">Muscle</th>
                 <th className="font-semibold pb-1">Score</th>
-                <th className="text-left font-semibold pb-1">Top Lift</th>
-                <th className="font-semibold pb-1">Best</th>
+                <th className="text-left font-semibold pb-1">Contributing Lifts</th>
                 <th className="font-semibold pb-1">Tier</th>
               </tr>
             </thead>
             <tbody>
               {muscleScores.map((m) => {
-                const top = m.contributions
+                const lifts = [...m.contributions]
                   .filter((c) => c.pct > 0)
-                  .sort((a, b) => b.pct - a.pct)[0];
+                  .sort((a, b) => b.pct - a.pct);
+                const shown = lifts.slice(0, 3);
+                const extraCount = lifts.length - shown.length;
                 return (
                   <tr key={m.muscle} style={{ borderTop: '1px solid rgba(255,255,255,0.06)', opacity: m.score > 0 ? 1 : 0.45 }}>
                     <td className="py-1 pr-2 font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>{m.muscle}</td>
                     <td className="py-1 text-center font-bold" style={{ color: m.tier.color }}>{m.score.toFixed(0)}</td>
-                    <td className="py-1 pr-2" style={{ color: 'var(--text-muted)' }}>{top?.exercise ?? '—'}</td>
-                    <td className="py-1 text-center" style={{ color: 'var(--text-muted)' }}>
-                      {top ? `${top.bestLoad}kg×${top.bestReps}` : '—'}
+                    <td className="py-1 pr-2" style={{ color: 'var(--text-muted)' }}>
+                      {shown.length === 0
+                        ? '—'
+                        : shown.map((c) => (
+                            <div key={c.exercise}>
+                              {c.exercise} · {c.bestLoad}kg×{c.bestReps}
+                            </div>
+                          )).concat(
+                            extraCount > 0
+                              ? [<div key="more" className="italic" style={{ color: 'rgba(255,255,255,0.4)' }}>+{extraCount} more</div>]
+                              : [],
+                          )}
                     </td>
                     <td className="py-1 text-center">
                       <span className="px-1.5 py-0.5 rounded-full font-bold" style={{ background: `${m.tier.color}20`, color: m.tier.color }}>

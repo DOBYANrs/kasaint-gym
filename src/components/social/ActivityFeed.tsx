@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useWorkout } from '../../context/WorkoutContext';
-import { calculateVolume, calculateExercise1RM } from '../../utils/calculations';
+import { calculateVolume } from '../../utils/calculations';
 import type { UserId } from '../../types';
 
 const USER_DISPLAY: Record<UserId, { name: string; emoji: string; color: string }> = {
@@ -41,6 +41,20 @@ export default function ActivityFeed() {
 
     for (const userId of users) {
       const userData = workoutData[userId] ?? {};
+
+      // Per-exercise all-time heaviest real kg, used to count genuine PRs.
+      const allTimeBest: Record<string, number> = {};
+      for (const [, day] of Object.entries(userData)) {
+        if (!day?.exercises) continue;
+        for (const ex of day.exercises) {
+          for (const set of ex.sets) {
+            if (set.weightKg > 0 && set.weightKg > (allTimeBest[ex.exerciseName] ?? 0)) {
+              allTimeBest[ex.exerciseName] = set.weightKg;
+            }
+          }
+        }
+      }
+
       for (const [dateKey, day] of Object.entries(userData)) {
         if (!day?.completed || !day.exercises?.length) continue;
 
@@ -49,8 +63,9 @@ export default function ActivityFeed() {
 
         for (const ex of day.exercises) {
           totalVolume += calculateVolume(ex);
-          const oneRM = calculateExercise1RM(ex);
-          if (oneRM > 0) prCount++;
+          const bestKg = allTimeBest[ex.exerciseName] ?? 0;
+          const hitsBest = ex.sets.some((s) => s.weightKg > 0 && s.weightKg >= bestKg);
+          if (hitsBest) prCount++;
         }
 
         items.push({

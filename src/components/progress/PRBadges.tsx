@@ -6,8 +6,12 @@ import { calculateMaxWeight } from '../../utils/calculations';
 interface PRInfo {
   exercise: string;
   weightKg: number;
+  reps: number;
   dateKey: string;
 }
+
+// Bodyweight, timed holds — not a weight PR, never shown as one.
+const BODYWEIGHT_TIMED = new Set(['Dead Hang']);
 
 export function usePRData(userId: UserId) {
   const { workoutData } = useWorkout();
@@ -20,20 +24,24 @@ export function usePRData(userId: UserId) {
     for (const [dateKey, day] of Object.entries(userData)) {
       if (!day?.exercises) continue;
       for (const exercise of day.exercises) {
+        if (BODYWEIGHT_TIMED.has(exercise.exerciseName)) continue;
         const weightKg = calculateMaxWeight(exercise);
         if (weightKg > 0) {
+          const reps = Math.max(...exercise.sets.filter((s) => s.weightKg === weightKg).map((s) => s.reps), 0);
           if (!exerciseHistory[exercise.exerciseName]) {
             exerciseHistory[exercise.exerciseName] = [];
           }
-          exerciseHistory[exercise.exerciseName].push({ exercise: exercise.exerciseName, weightKg, dateKey });
+          exerciseHistory[exercise.exerciseName].push({ exercise: exercise.exerciseName, weightKg, reps, dateKey });
         }
       }
     }
 
-    // Find PRs (heaviest weight lifted per exercise)
+    // Find PRs — heaviest real kg, most reps on ties, latest date last.
     const prs: PRInfo[] = [];
     for (const [, history] of Object.entries(exerciseHistory)) {
-      const sorted = [...history].sort((a, b) => b.weightKg - a.weightKg);
+      const sorted = [...history].sort((a, b) =>
+        b.weightKg - a.weightKg || b.reps - a.reps || a.dateKey.localeCompare(b.dateKey),
+      );
       if (sorted.length > 0 && sorted[0].weightKg > 0) {
         prs.push(sorted[0]);
       }
@@ -100,7 +108,7 @@ export default function PRBadges({ userId }: { userId: UserId }) {
         <div>
           <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>🏆 Personal Records</p>
           <div className="space-y-1.5">
-            {prs.slice(0, 8).map((pr) => (
+            {prs.map((pr) => (
               <div
                 key={pr.exercise}
                 className="flex items-center justify-between py-2 px-3 rounded-xl"
@@ -113,7 +121,9 @@ export default function PRBadges({ userId }: { userId: UserId }) {
                   <span className="text-sm">🏆</span>
                   <span className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.9)' }}>{pr.exercise}</span>
                 </div>
-                <span className="text-xs font-bold" style={{ color: '#FF5E00' }}>{pr.weightKg} kg</span>
+                <span className="text-xs font-bold" style={{ color: '#FF5E00' }}>
+                  {pr.weightKg} kg × {pr.reps}
+                </span>
               </div>
             ))}
           </div>

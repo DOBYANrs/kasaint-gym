@@ -83,7 +83,7 @@ export const EXERCISE_MUSCLE_MAP: Record<string, string[]> = {
   '1-Hand Lat Pulldown': ['Back', 'Biceps'],
   'Archer Pull': ['Back', 'Biceps'],
   'Bent-Over Dumbbell Reverse Fly': ['Shoulders', 'Back'],
-  'Face Pulls': ['Shoulders', 'Back', 'Core'],
+  'Face Pulls': ['Shoulders', 'Core'],
   'Front Lever Progression': ['Back', 'Core', 'Abs'],
   'Dead Hang': ['Back', 'Forearms'],
   // Friday: Legs + Abs (Abductors/Adductors focus)
@@ -106,7 +106,7 @@ export const EXERCISE_MUSCLE_MAP: Record<string, string[]> = {
   'Push-Ups': ['Chest', 'Shoulders'],
   'Shoulder Press': ['Shoulders'],
   'Lateral Raises': ['Shoulders'],
-  'Face Pull': ['Shoulders', 'Back'],
+  'Face Pull': ['Shoulders'],
   'Barbell Row': ['Back'],
   'T-Bar Row': ['Back'],
   'Pull Up': ['Back', 'Biceps'],

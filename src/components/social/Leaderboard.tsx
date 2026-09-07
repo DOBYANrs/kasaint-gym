@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useWorkout } from '../../context/WorkoutContext';
-import { calculateExercise1RM } from '../../utils/calculations';
 import type { UserId } from '../../types';
 
 const USER_DISPLAY: Record<UserId, { name: string; color: string }> = {
@@ -8,18 +7,25 @@ const USER_DISPLAY: Record<UserId, { name: string; color: string }> = {
   keneni: { name: 'Keneni', color: '#00E676' },
 };
 
-// Key exercises for leaderboard
+// Key exercises for leaderboard (actual schedule lifts — real kg, no 1RM estimates)
 const LEADERBOARD_EXERCISES = [
   'Incline Chest Press',
+  'Yellow Machine Chest Press',
   'Cable Fly',
   'Overhead Press',
-  'Biceps Curl / Cable Curl',
-  'Pull Up',
+  'Lower Chest Cable Pulldown',
+  'Pull Down',
+  'Row Machine 2 Var 2',
+  'Face Pulls',
   'Leg Extension',
-  'Triceps Push Down',
+  'Low-Foot Placement Leg Press',
+  'Adduction Machine',
   'Hamstring Curl',
-  'Calf Raise',
+  'Standing Calf Raise',
+  'Triceps Push Down',
+  'Biceps Curl / Cable Curl',
   'Spider Curl',
+  'Cable Crunches',
 ];
 
 export default function Leaderboard() {
@@ -27,11 +33,10 @@ export default function Leaderboard() {
   const [selectedExercise, setSelectedExercise] = useState(LEADERBOARD_EXERCISES[0]);
 
   const rankings = useMemo(() => {
-    const results: { userId: UserId; oneRM: number; bestWeight: number; bestReps: number }[] = [];
+    const results: { userId: UserId; bestWeight: number; bestReps: number }[] = [];
 
     for (const userId of ['abel', 'keneni'] as UserId[]) {
       const userData = workoutData[userId] ?? {};
-      let best1RM = 0;
       let bestWeight = 0;
       let bestReps = 0;
 
@@ -41,9 +46,10 @@ export default function Leaderboard() {
           if (ex.exerciseName !== selectedExercise) continue;
           for (const set of ex.sets) {
             if (set.weightKg > 0 && set.reps > 0) {
-              const rm = calculateExercise1RM({ ...ex, sets: [set] });
-              if (rm > best1RM) {
-                best1RM = rm;
+              if (
+                set.weightKg > bestWeight ||
+                (set.weightKg === bestWeight && set.reps > bestReps)
+              ) {
                 bestWeight = set.weightKg;
                 bestReps = set.reps;
               }
@@ -52,13 +58,14 @@ export default function Leaderboard() {
         }
       }
 
-      results.push({ userId, oneRM: Math.round(best1RM * 10) / 10, bestWeight, bestReps });
+      results.push({ userId, bestWeight, bestReps });
     }
 
-    return results.sort((a, b) => b.oneRM - a.oneRM);
+    // Rank by heaviest real kg, then most reps for ties.
+    return results.sort((a, b) => b.bestWeight - a.bestWeight || b.bestReps - a.bestReps);
   }, [workoutData, selectedExercise]);
 
-  const maxOneRM = Math.max(...rankings.map((r) => r.oneRM), 1);
+  const maxWeight = Math.max(...rankings.map((r) => r.bestWeight), 1);
 
   return (
     <div className="space-y-3">
@@ -84,8 +91,8 @@ export default function Leaderboard() {
       <div className="space-y-2">
         {rankings.map((rank, i) => {
           const user = USER_DISPLAY[rank.userId];
-          const barWidth = maxOneRM > 0 ? (rank.oneRM / maxOneRM) * 100 : 0;
-          const isWinner = i === 0 && rank.oneRM > 0;
+          const barWidth = maxWeight > 0 ? (rank.bestWeight / maxWeight) * 100 : 0;
+          const isWinner = i === 0 && rank.bestWeight > 0;
 
           return (
             <div
@@ -108,7 +115,7 @@ export default function Leaderboard() {
                 </div>
                 <div className="text-right">
                   <span className="text-sm font-bold" style={{ color: isWinner ? '#FF5E00' : 'rgba(255,255,255,0.9)' }}>
-                    {rank.oneRM > 0 ? `${rank.oneRM} kg` : '—'}
+                    {rank.bestWeight > 0 ? `${rank.bestWeight} kg` : '—'}
                   </span>
                   {rank.bestWeight > 0 && (
                     <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>

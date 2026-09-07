@@ -42,4 +42,4 @@ Create a `.env` file in the project root with your Firebase config (see `.env.ex
 
 Push to the `main` branch — GitHub Actions automatically builds and deploys to:
 
-**https://dob-yan.github.io/kasaint-gym/**
+**https://dobyanrs.github.io/kasaint-gym/**

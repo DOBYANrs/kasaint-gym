@@ -93,8 +93,11 @@ export const EXERCISE_TO_LIFT: Record<string, LiftMapping> = {
 };
 
 // ─── Map each supported core lift to the muscle groups it colors ──
+// Pressing (bench/incline family) is Chest-dominant: the front delts only
+// assist, so bench-press weight never colors Shoulders — shoulders are ranked
+// by their own overhead-press / rear-delt work instead.
 export const LIFT_TO_MUSCLES: Record<string, MuscleGroup[]> = {
-  'Bench Press': ['Chest', 'Shoulders', 'Triceps'],
+  'Bench Press': ['Chest', 'Triceps'],
   'Overhead Press': ['Shoulders', 'Triceps'],
   'Lat Pulldown': ['Back', 'Biceps'],
   'Deadlift': ['Back', 'Shoulders', 'Forearms'],

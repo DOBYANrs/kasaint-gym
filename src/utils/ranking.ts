@@ -147,7 +147,10 @@ const helpers = {
 // Map exercise names to their primary (100%) and secondary (fractional) muscles
 const EXERCISE_TO_MUSCLES: Record<string, MuscleContribution> = {
   // Monday: Chest + Back + Shoulders + Triceps + Biceps
-  'Incline Chest Press':              helpers.ps(['Chest'], ['Shoulders'], 0.10),
+  // Incline press is a CHEST lift: the upper chest takes almost the whole
+  // load, the front delts only assist a little, so the shoulder gets a tiny
+  // carry-over (5%) and never a shoulder rank driven by incline-press weight.
+  'Incline Chest Press':              helpers.ps(['Chest'], ['Shoulders'], 0.05),
   'Cable Fly':                        helpers.p('Chest'),
   'Lat Pulldown':                     helpers.ps(['Back'], ['Biceps'], 0.15),
   'Overhead Press':                   helpers.ps(['Shoulders'], ['Triceps'], 0.10),

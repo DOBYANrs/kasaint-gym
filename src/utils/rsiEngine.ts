@@ -77,14 +77,24 @@ export interface ExerciseStandard {
 
 export const EXERCISE_STANDARDS: Record<string, ExerciseStandard> = {
   // ── CHEST ──
-  // Bench Press family: 1RM/BW ratio from Strength Level (150M+ logged lifts).
-  // Machine variant (Yellow Machine Chest Press) scaled ×0.85 per document.
+  // Incline Chest Press uses REAL INCLINE-bench population norms (Gravitus /
+  // Strength Level logs of incline pressers), NOT flat-bench tables.
+  // Incline is harder than flat bench — incline 1RM is typically only
+  // 75-85% of a lifter's flat 1RM — so the same kg pressed on an incline
+  // bench represents MORE strength than that same kg on a flat bench.
+  // Scoring incline work against flat-bench standards would therefore
+  // under-rank it; scoring it against its own (weaker) incline population
+  // ladder gives an incline press exactly the extra credit it deserves.
+  // Ratios are e1RM ÷ bodyweight at the 5/20/50/80/95th percentiles for men.
   'Incline Chest Press': {
-    name: 'Incline Chest Press', rat: [0.40, 0.50, 1.00, 1.25, 1.50], upper: true,
-    targets: [{ muscle: 'Chest', effectiveness: 0.40 }],
+    name: 'Incline Chest Press', rat: [0.58, 0.85, 1.06, 1.28, 1.50], upper: true,
+    targets: [{ muscle: 'Chest', effectiveness: 0.45 }],
   },
+  // Plate-loaded machine press. Easier to stabilize than a barbell incline,
+  // so it keeps the previous ×0.85 relationship to the incline ladder above
+  // (machine loads are judged on the same relative scale, slightly relaxed).
   'Yellow Machine Chest Press': {
-    name: 'Yellow Machine Chest Press', rat: [0.34, 0.43, 0.85, 1.06, 1.28], upper: true, scoreWeight: 0.7,
+    name: 'Yellow Machine Chest Press', rat: [0.49, 0.72, 0.90, 1.09, 1.28], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Chest', effectiveness: 0.20 }],
   },
   'Cable Fly': {
@@ -99,6 +109,11 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandard> = {
     name: 'Lower Chest Cable Pulldown', rat: [0.10, 0.16, 0.30, 0.48, 0.65], upper: true, scoreWeight: 0.7,
     targets: [{ muscle: 'Chest', effectiveness: 0.25 }],
   },
+  // NOTE: none of the press/fly family above targets the coarse 'Shoulders'
+  // group. Pressing is Chest-dominant: an incline press load is a CHEST
+  // strength signal — the front-deltoid/triceps involvement is real but
+  // secondary, so those muscles are only ever scored by their own direct
+  // work (Overhead Press, Face Pulls, Reverse Fly, rows for rear delts, etc.).
   // ── BACK (vertical pull) ──
   // Lat Pulldown: 1RM/BW ratio from Strength Level.
   'Lat Pulldown': {
@@ -430,6 +445,431 @@ export function interpolate(x: number, anchors: [number, number][]): number {
 export function tierFromPercentileInfo(pct: number): TierInfo {
   const t = tierFromPercentile(pct);
   return SCIENTIFIC_TIERS[Math.max(0, Math.min(t.level, SCIENTIFIC_TIERS.length - 1))];
+}
+
+// ─── Inverse interpolation (percentile -> anchor value) ───
+// Mirror of interpolate(): given a percentile, recover the ratio/reps/seconds
+// that sits at that percentile on the same anchor curve.
+export function invertInterpolate(y: number, anchors: [number, number][]): number {
+  // Sort anchors by their y (percentile) so segments are contiguous.
+  const sorted = [...anchors].sort((a, b) => a[1] - b[1]);
+  const yMin = sorted[0][1];
+  const yMax = sorted[sorted.length - 1][1];
+  if (y <= yMin) {
+    const [x0, y0] = sorted[0];
+    const [x1, y1] = sorted[1] ?? sorted[0];
+    if (y1 - y0 === 0) return x0;
+    return x0 + ((y - y0) / (y1 - y0)) * (x1 - x0);
+  }
+  if (y >= yMax) {
+    const [x0, y0] = sorted[sorted.length - 2] ?? sorted[0];
+    const [x1, y1] = sorted[sorted.length - 1];
+    if (y1 - y0 === 0) return x1;
+    return x1 + ((y - y1) / (y1 - y0)) * (x1 - x0);
+  }
+  for (let i = 1; i < sorted.length; i++) {
+    const [xa, ya] = sorted[i - 1];
+    const [xb, yb] = sorted[i];
+    if (y <= yb) {
+      if (yb - ya === 0) return xb;
+      return xa + ((y - ya) / (yb - ya)) * (xb - xa);
+    }
+  }
+  return sorted[sorted.length - 1][0];
+}
+
+// ============================================================
+// FINE-GRAINED MUSCLE STRENGTH ENGINE
+// ------------------------------------------------------------
+// Each fine muscle is the specific muscle (or head) a lift actually
+// trains. Every exercise carries an EMG-informed activation table:
+//   primary = the movement is the muscle's own strength test
+//             (e.g. Spider Curl → Biceps, Reverse Fly → Rear Delts)
+//   assist  = the muscle is a real but secondary mover in a compound
+//             (e.g. Overhead Press → Side Delts, Rows → Lats)
+// A fine muscle's strength percentile = activation-weighted average of
+// the *population percentiles* of every logged lift that hits it (same
+// difficulty & bodyweight normalization as the coarse composites).
+// Muscles reached only as an assist (no dedicated lift) score off the
+// compound but are flagged `indirect` so they read honestly.
+// ============================================================
+
+export type FineMuscle =
+  | 'Chest' | 'Front Delts' | 'Side Delts' | 'Rear Delts'
+  | 'Lats' | 'Mid-Back' | 'Traps'
+  | 'Abs' | 'Obliques'
+  | 'Quads' | 'Glutes' | 'Hamstrings' | 'Calves' | 'Adductors'
+  | 'Biceps' | 'Triceps' | 'Forearms';
+
+export interface FineTarget {
+  muscle: FineMuscle;
+  // Fraction of the exercise's effect attributable to this muscle (sums to 1).
+  share: number;
+  role: 'primary' | 'assist';
+}
+
+// Display/region grouping for UI legends.
+export const FINE_REGION: Record<FineMuscle, string> = {
+  'Chest': 'Push', 'Front Delts': 'Push', 'Side Delts': 'Push', 'Rear Delts': 'Pull',
+  'Lats': 'Pull', 'Mid-Back': 'Pull', 'Traps': 'Pull',
+  'Abs': 'Core', 'Obliques': 'Core',
+  'Quads': 'Legs', 'Glutes': 'Legs', 'Hamstrings': 'Legs', 'Calves': 'Legs', 'Adductors': 'Legs',
+  'Biceps': 'Pull', 'Triceps': 'Push', 'Forearms': 'Pull',
+};
+
+export const ALL_FINE_MUSCLES: FineMuscle[] = [
+  'Chest', 'Front Delts', 'Side Delts', 'Rear Delts', 'Lats', 'Mid-Back', 'Traps',
+  'Abs', 'Obliques', 'Quads', 'Glutes', 'Hamstrings', 'Calves', 'Adductors',
+  'Biceps', 'Triceps', 'Forearms',
+];
+
+// EMG-informed activation table per exercise. Shares sum to ≈1 per exercise.
+// `primary` marks the muscle the movement most specifically tests.
+export const FINE_TARGETS: Record<string, FineTarget[]> = {
+  // ── CHEST ──
+  // Pressing is upper-chest dominant. The incline angle shifts almost all of
+  // the pec work to the upper (clavicular) chest; the front delts assist but
+  // are NOT trained "by the same weight" as the chest, and triceps only finish
+  // the lockout. So incline/machine press sets credit Chest with the large
+  // majority share and only a small shoulder/triceps assist — a 40 kg incline
+  // press must never look like 40 kg of shoulder training.
+  'Incline Chest Press': [
+    { muscle: 'Chest', share: 0.65, role: 'primary' },
+    { muscle: 'Front Delts', share: 0.15, role: 'assist' },
+    { muscle: 'Triceps', share: 0.20, role: 'assist' },
+  ],
+  'Yellow Machine Chest Press': [
+    { muscle: 'Chest', share: 0.60, role: 'primary' },
+    { muscle: 'Front Delts', share: 0.10, role: 'assist' },
+    { muscle: 'Triceps', share: 0.30, role: 'assist' },
+  ],
+  'Cable Fly': [
+    { muscle: 'Chest', share: 0.88, role: 'primary' },
+    { muscle: 'Front Delts', share: 0.12, role: 'assist' },
+  ],
+  'Cable Fly 55 Degree': [
+    { muscle: 'Chest', share: 0.82, role: 'primary' },
+    { muscle: 'Front Delts', share: 0.18, role: 'assist' },
+  ],
+  'Lower Chest Cable Pulldown': [
+    { muscle: 'Chest', share: 0.85, role: 'primary' },
+    { muscle: 'Front Delts', share: 0.10, role: 'assist' },
+    { muscle: 'Triceps', share: 0.05, role: 'assist' },
+  ],
+  // ── SHOULDERS ──
+  'Overhead Press': [
+    { muscle: 'Front Delts', share: 0.50, role: 'primary' },
+    { muscle: 'Triceps', share: 0.35, role: 'assist' },
+    { muscle: 'Side Delts', share: 0.15, role: 'assist' },
+  ],
+  'Lateral Raise': [
+    { muscle: 'Side Delts', share: 0.85, role: 'primary' },
+    { muscle: 'Traps', share: 0.15, role: 'assist' },
+  ],
+  'Bent-Over Dumbbell Reverse Fly': [
+    { muscle: 'Rear Delts', share: 0.60, role: 'primary' },
+    { muscle: 'Traps', share: 0.25, role: 'assist' },
+    { muscle: 'Mid-Back', share: 0.15, role: 'assist' },
+  ],
+  'Face Pulls': [
+    { muscle: 'Rear Delts', share: 0.50, role: 'primary' },
+    { muscle: 'Traps', share: 0.30, role: 'assist' },
+    { muscle: 'Mid-Back', share: 0.20, role: 'assist' },
+  ],
+  'Archer Pull': [
+    { muscle: 'Mid-Back', share: 0.40, role: 'primary' },
+    { muscle: 'Rear Delts', share: 0.30, role: 'assist' },
+    { muscle: 'Lats', share: 0.20, role: 'assist' },
+    { muscle: 'Biceps', share: 0.10, role: 'assist' },
+  ],
+  // ── BACK ──
+  'Lat Pulldown': [
+    { muscle: 'Lats', share: 0.70, role: 'primary' },
+    { muscle: 'Biceps', share: 0.20, role: 'assist' },
+    { muscle: 'Mid-Back', share: 0.10, role: 'assist' },
+  ],
+  'Pull Down': [
+    { muscle: 'Lats', share: 0.70, role: 'primary' },
+    { muscle: 'Biceps', share: 0.20, role: 'assist' },
+    { muscle: 'Mid-Back', share: 0.10, role: 'assist' },
+  ],
+  '1-Hand Lat Pulldown': [
+    { muscle: 'Lats', share: 0.65, role: 'primary' },
+    { muscle: 'Biceps', share: 0.20, role: 'assist' },
+    { muscle: 'Mid-Back', share: 0.15, role: 'assist' },
+  ],
+  'Pull Up': [
+    { muscle: 'Lats', share: 0.70, role: 'primary' },
+    { muscle: 'Biceps', share: 0.25, role: 'assist' },
+    { muscle: 'Mid-Back', share: 0.05, role: 'assist' },
+  ],
+  'Row Machine 2 Var 2': [
+    { muscle: 'Mid-Back', share: 0.40, role: 'primary' },
+    { muscle: 'Lats', share: 0.30, role: 'assist' },
+    { muscle: 'Rear Delts', share: 0.15, role: 'assist' },
+    { muscle: 'Biceps', share: 0.15, role: 'assist' },
+  ],
+  'Row Machine 1 Var 2': [
+    { muscle: 'Mid-Back', share: 0.45, role: 'primary' },
+    { muscle: 'Lats', share: 0.25, role: 'assist' },
+    { muscle: 'Rear Delts', share: 0.20, role: 'assist' },
+    { muscle: 'Biceps', share: 0.10, role: 'assist' },
+  ],
+  'Dead Hang': [
+    { muscle: 'Forearms', share: 0.70, role: 'primary' },
+    { muscle: 'Lats', share: 0.20, role: 'assist' },
+    { muscle: 'Traps', share: 0.10, role: 'assist' },
+  ],
+  // ── LEGS ──
+  'Low-Foot Placement Leg Press': [
+    { muscle: 'Quads', share: 0.60, role: 'primary' },
+    { muscle: 'Glutes', share: 0.25, role: 'assist' },
+    { muscle: 'Hamstrings', share: 0.15, role: 'assist' },
+  ],
+  'Low-Foot Leg Press': [
+    { muscle: 'Quads', share: 0.60, role: 'primary' },
+    { muscle: 'Glutes', share: 0.25, role: 'assist' },
+    { muscle: 'Hamstrings', share: 0.15, role: 'assist' },
+  ],
+  'Leg Press': [
+    { muscle: 'Quads', share: 0.60, role: 'primary' },
+    { muscle: 'Glutes', share: 0.25, role: 'assist' },
+    { muscle: 'Hamstrings', share: 0.15, role: 'assist' },
+  ],
+  'Leg Extension': [
+    { muscle: 'Quads', share: 0.95, role: 'primary' },
+    { muscle: 'Glutes', share: 0.05, role: 'assist' },
+  ],
+  'Hamstring Curl': [
+    { muscle: 'Hamstrings', share: 0.90, role: 'primary' },
+    { muscle: 'Calves', share: 0.10, role: 'assist' },
+  ],
+  'Leg Curl': [
+    { muscle: 'Hamstrings', share: 0.90, role: 'primary' },
+    { muscle: 'Calves', share: 0.10, role: 'assist' },
+  ],
+  'Adduction Machine': [
+    { muscle: 'Adductors', share: 0.95, role: 'primary' },
+    { muscle: 'Quads', share: 0.05, role: 'assist' },
+  ],
+  // Legacy name for the same machine.
+  'Abduction Machine': [
+    { muscle: 'Adductors', share: 0.95, role: 'primary' },
+    { muscle: 'Quads', share: 0.05, role: 'assist' },
+  ],
+  'Calf Raise': [{ muscle: 'Calves', share: 1.0, role: 'primary' }],
+  'Standing Calf Raise': [{ muscle: 'Calves', share: 1.0, role: 'primary' }],
+  // ── ARMS ──
+  'Spider Curl': [
+    { muscle: 'Biceps', share: 0.80, role: 'primary' },
+    { muscle: 'Forearms', share: 0.20, role: 'assist' },
+  ],
+  'Biceps Curl / Cable Curl': [
+    { muscle: 'Biceps', share: 0.75, role: 'primary' },
+    { muscle: 'Forearms', share: 0.25, role: 'assist' },
+  ],
+  'Triceps Push Down': [
+    { muscle: 'Triceps', share: 0.90, role: 'primary' },
+    { muscle: 'Forearms', share: 0.10, role: 'assist' },
+  ],
+  'Triceps Overhead Extension': [
+    { muscle: 'Triceps', share: 0.90, role: 'primary' },
+    { muscle: 'Forearms', share: 0.10, role: 'assist' },
+  ],
+  'Wrist Flexion & Extension Superset': [{ muscle: 'Forearms', share: 1.0, role: 'primary' }],
+  // ── CORE ──
+  'Cable Crunches': [
+    { muscle: 'Abs', share: 0.80, role: 'primary' },
+    { muscle: 'Obliques', share: 0.20, role: 'assist' },
+  ],
+  'Floor Crunches / Hanging Knee Raises': [
+    { muscle: 'Abs', share: 0.85, role: 'primary' },
+    { muscle: 'Obliques', share: 0.15, role: 'assist' },
+  ],
+  'Oblique Side Switches': [
+    { muscle: 'Obliques', share: 0.70, role: 'primary' },
+    { muscle: 'Abs', share: 0.30, role: 'assist' },
+  ],
+  'Front Lever Progression': [
+    { muscle: 'Abs', share: 0.55, role: 'primary' },
+    { muscle: 'Lats', share: 0.30, role: 'assist' },
+    { muscle: 'Forearms', share: 0.15, role: 'assist' },
+  ],
+};
+
+// Tier boundaries by percentile (same ladder as TIER_PERCENTILES).
+export const FINE_TIER_BOUNDARIES: { level: number; name: string; percentile: number }[] =
+  TIER_PERCENTILES.map((t) => ({ level: t.level, name: t.name, percentile: t.percentile }));
+
+// Next stage info + a concrete "how to get there" suggestion per fine muscle.
+export interface NextStageInfo {
+  nextTierName: string;      // e.g. 'Intermediate'
+  boundaryPercentile: number; // percentile needed to reach that tier
+  gap: number;                // percentile points still needed (0-100 scale)
+  suggestion: string;         // human-readable "add ~X kg / +Y reps / hold Zs on <lift>"
+}
+
+export interface FineMuscleScore {
+  muscle: FineMuscle;
+  region: string;
+  score: number;          // 0-100 population percentile
+  tier: TierInfo;
+  indirect: boolean;      // only reached as an assist (no dedicated lift logged)
+  hasData: boolean;
+  // Top contribution for this muscle (lift + best set) — the "how to improve" anchor.
+  topExercise?: string;
+  topLoad?: number;
+  topReps?: number;
+  next?: NextStageInfo;   // absent at Elite tier
+}
+
+// Weighted percentile of every lift that hits a fine muscle.
+export function computeFineMuscleScores(
+  workoutData: Record<string, Record<string, { exercises: ExerciseLog[] } | undefined>>,
+  userId: UserId,
+  profile: AthleteProfile,
+  now: Date = new Date(),
+): FineMuscleScore[] {
+  // 1. Collect per-exercise best logs + percentiles once.
+  const pctByExercise = new Map<string, { pct: number; best: BestLog }>();
+  for (const exerciseName of Object.keys(EXERCISE_STANDARDS)) {
+    const best = bestLogForExercise(workoutData, userId, exerciseName, now);
+    if (!best) continue;
+    const pct = exercisePercentile(exerciseName, best, profile);
+    if (pct > 0) pctByExercise.set(exerciseName, { pct, best });
+  }
+
+  // 2. Accumulate activation-weighted percentiles per fine muscle.
+  const acc = new Map<FineMuscle, { total: number; weight: number; primaryWeight: number; top: { ex: string; credit: number } | null }>();
+  const ensure = (m: FineMuscle) => {
+    if (!acc.has(m)) acc.set(m, { total: 0, weight: 0, primaryWeight: 0, top: null });
+    return acc.get(m)!;
+  };
+
+  for (const [exerciseName, entry] of pctByExercise.entries()) {
+    const fine = FINE_TARGETS[exerciseName];
+    if (!fine) continue;
+    const std = EXERCISE_STANDARDS[exerciseName];
+    const blend = std?.scoreWeight ?? 1.0;
+    for (const t of fine) {
+      const e = ensure(t.muscle);
+      const credit = t.share * blend;
+      e.total += entry.pct * credit;
+      e.weight += credit;
+      if (t.role === 'primary') e.primaryWeight += credit;
+      if (!e.top || credit > e.top.credit) e.top = { ex: exerciseName, credit };
+    }
+  }
+
+  // 3. Build per-muscle results in display order.
+  const results: FineMuscleScore[] = ALL_FINE_MUSCLES.map((muscle) => {
+    const e = acc.get(muscle);
+    const hasData = !!e && e.weight > 0;
+    const score = hasData ? e!.total / e!.weight : 0;
+    const indirect = hasData ? e!.primaryWeight === 0 : true;
+    const tier = tierFromPercentileInfo(score);
+
+    let next: NextStageInfo | undefined;
+    let topExercise: string | undefined;
+    let topLoad: number | undefined;
+    let topReps: number | undefined;
+    if (hasData && score < 95) {
+      // Next tier = first boundary strictly above the current score.
+      const nxt = FINE_TIER_BOUNDARIES.find((b) => b.percentile > score);
+      if (nxt) {
+        const gap = Math.max(0, nxt.percentile - score);
+        next = {
+          nextTierName: nxt.name,
+          boundaryPercentile: nxt.percentile,
+          gap,
+          suggestion: '',
+        };
+      }
+      // Concrete suggestion from the muscle's top lift (best set already known).
+      const top = e!.top;
+      if (top) {
+        const entry = pctByExercise.get(top.ex);
+        const std = EXERCISE_STANDARDS[top.ex];
+        if (entry && std) {
+          topExercise = top.ex;
+          topLoad = entry.best.weightKg;
+          topReps = entry.best.reps;
+          next!.suggestion = buildNextSuggestion(top.ex, entry.pct, entry.best, profile, nxt!.percentile);
+        }
+      }
+    }
+
+    return {
+      muscle,
+      region: FINE_REGION[muscle],
+      score: Math.round(score * 10) / 10,
+      tier,
+      indirect,
+      hasData,
+      topExercise,
+      topLoad,
+      topReps,
+      next,
+    };
+  });
+
+  return results;
+}
+
+// Build the human suggestion: what load/reps/hold-time on the top lift would
+// put *that lift* at the next tier's percentile (approximation — assumes the
+// rest of the muscle's lifts stay put).
+function buildNextSuggestion(
+  exerciseName: string,
+  _currentPct: number,
+  best: BestLog,
+  profile: AthleteProfile,
+  targetPercentile: number,
+): string {
+  const std = EXERCISE_STANDARDS[exerciseName];
+  if (!std) return '';
+  const round = (n: number, step = 2.5) => Math.round(n / step) * step;
+
+  // Time-based holds (Dead Hang): suggest a hold duration.
+  const timeAnchors = TIME_ANCHORS[exerciseName];
+  if (timeAnchors) {
+    const targetSec = Math.max(0, Math.round(invertInterpolate(targetPercentile, timeAnchors.map((a) => [a[0], a[1]] as [number, number]))));
+    const cur = best.reps || 0;
+    if (targetSec <= cur) return `keep pushing your Dead Hang past ${cur}s (target ~${Math.max(cur + 5, targetSec)}s)`;
+    return `hold ~${targetSec}s on ${exerciseName} (now ${cur}s)`;
+  }
+
+  // Rep-target core moves (crunches / obliques / front lever).
+  if (std.isCore) {
+    const targetReps = CORE_TARGETS[exerciseName] ?? 1;
+    const needed = Math.max(0, Math.round((targetPercentile / 50) * targetReps));
+    const cur = best.reps || 0;
+    if (needed <= cur) return `keep pushing ${exerciseName} past ${cur} reps`;
+    return `hit ~${needed} reps on ${exerciseName} (now ${cur})`;
+  }
+
+  // Loaded lift: recover the ratio that maps to the target percentile.
+  if (best.e1RM <= 0 || profile.bodyWeightKg <= 0) return '';
+  const anchors: [number, number][] = [
+    [std.rat[0], 5],   // Beginner
+    [std.rat[1], 20],  // Novice
+    [std.rat[2], 50],  // Intermediate
+    [std.rat[3], 80],  // Advanced
+    [std.rat[4], 95],  // Elite
+  ];
+  const targetAdjusted = invertInterpolate(targetPercentile, anchors);
+  const bmi = bodyMassIndex(profile.bodyWeightKg, profile.heightCm);
+  const leverage = bmiLeverage(bmi, std.upper);
+  const age = ageCoefficient(profile.age);
+  const rel = targetAdjusted / (leverage * age);
+  const targetE1RM = rel * profile.bodyWeightKg;
+  const reps = Math.max(1, best.reps || 8);
+  const targetLoad = targetE1RM / (1 + reps / 30);
+  const cur = best.weightKg || 0;
+  if (targetLoad <= cur) return `keep pushing ${exerciseName} past ${cur}kg × ${reps}`;
+  const bump = Math.max(2.5, round(targetLoad - cur));
+  const roundedTarget = round(targetLoad);
+  return `add ~${bump}kg → ${Math.max(0, roundedTarget)}kg × ${reps} on ${exerciseName} (now ${cur}kg × ${reps})`;
 }
 
 // ─── Composite muscle score (weighted, includes every exercise) ──

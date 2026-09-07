@@ -117,7 +117,8 @@ export default function RankingPage() {
           </table>
         </div>
         <p className="text-[9px] mt-2" style={{ color: 'var(--text-muted)' }}>
-          Dimmed rows have no logged sets at all (or no weight) across your whole history. Adductors have no direct exercise and mirror the status quo.
+          Dimmed rows have no logged sets at all across your whole history. Pressing only colors Chest — incline-press weight never ranks your Shoulders.
+          Lower Back and outer-thigh Abductors have no dedicated exercise in the plan, so they stay dimmed until you add one; inner-thigh Adductors are covered by the Adduction Machine.
         </p>
       </div>
 
